@@ -30,9 +30,9 @@ st.info("Le fichier doit avoir 2 colonnes : 'Code commune Insee' et 'Nom du Comi
 uploaded_file = st.file_uploader("Choisir un fichier CSV", type="csv")
 
 if uploaded_file:
-    # Ce qui est ci-dessous est décalé d'un niveau (4 espaces)
-    df_upload = pd.read_csv(uploaded_file, dtype={"Code commune Insee": str})
-    
+    # On ajoute sep=None et engine='python' pour qu'il détecte automatiquement si c'est une virgule ou un point-virgule
+    df_upload = pd.read_csv(uploaded_file, sep=None, engine='python', dtype={"Code commune Insee": str})
+       
     if st.button("Appliquer la mise à jour"):
         # Ce qui est ci-dessous est décalé de deux niveaux (8 espaces)
         st.session_state.df_main = st.session_state.df_main.merge(
@@ -56,13 +56,39 @@ if dept_filter:
     df_display = df_display[df_display["Libellé Département"].isin(dept_filter)]
 
 # --- AFFICHAGE ET EXPORT ---
-st.subheader("📊 Visualisation des données")
-st.dataframe(df_display, use_container_width=True)
+st.subheader("📊 Visualisation et Exportation")
 
-csv_export = df_display.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="📥 Exporter le résultat en CSV",
-    data=csv_export,
-    file_name='export_donnees_cle.csv',
-    mime='text/csv',
+# 1. Choix des colonnes à exporter
+all_columns = df_display.columns.tolist()
+default_export_cols = ["Code commune Insee", "Nom du Comité Local Pour l'Emploi"]
+
+# On vérifie que les colonnes par défaut existent avant de les suggérer
+suggested_cols = [c for c in default_export_cols if c in all_columns]
+
+export_cols = st.multiselect(
+    "Sélectionnez les variables à inclure dans l'export :",
+    options=all_columns,
+    default=suggested_cols
 )
+
+# 2. Affichage du tableau filtré par colonnes
+if export_cols:
+    st.dataframe(df_display[export_cols], use_container_width=True)
+
+    # 3. Bouton d'exportation
+    csv_export = df_display[export_cols].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    
+    # Message d'aide contextuel
+    if set(default_export_cols).issubset(set(export_cols)):
+        st.info("💡 Votre sélection inclut les colonnes nécessaires pour une mise à jour ultérieure.")
+    else:
+        st.warning("⚠️ Pour pouvoir ré-uploader ce fichier plus tard, assurez-vous d'inclure 'Code commune Insee' et 'Nom du Comité Local Pour l'Emploi'.")
+
+    st.download_button(
+        label=f"📥 Télécharger l'export ({len(export_cols)} colonnes)",
+        data=csv_export,
+        file_name='export_personnalise_cle.csv',
+        mime='text/csv',
+    )
+else:
+    st.warning("Veuillez sélectionner au moins une colonne pour visualiser et exporter les données.")
