@@ -102,8 +102,51 @@ if uploaded_file:
             
     except Exception as e:
         st.error(f"⚠️ Une erreur technique est survenue lors de la lecture : {e}")
-        
 
+# --- SECTION ADMINISTRATION & ÉDITION DIRECTE ---
+st.divider()
+st.subheader("🔐 Zone Administration & Édition Directe")
+
+# 1. Vérification du code admin
+admin_code = st.sidebar.text_input("🔑 Code Administrateur", type="password")
+is_admin = (admin_code == "RPE_REFCLPE")
+
+if is_admin:
+    st.success("Mode Administrateur activé : vous pouvez modifier les cellules du tableau ci-dessous.")
+    
+    # 2. Utilisation du Data Editor (permet la saisie directe)
+    # On édite directement le dataframe de la session
+    edited_df = st.data_editor(
+        st.session_state.df_main,
+        use_container_width=True,
+        num_rows="dynamic", # Permet d'ajouter/supprimer des lignes si besoin
+        key="main_editor"
+    )
+    
+    # 3. Bouton pour sauvegarder les modifications manuelles
+    if st.button("💾 Enregistrer les modifications manuelles"):
+        st.session_state.df_main = edited_df
+        st.success("Modifications enregistrées dans la base !")
+        st.rerun()
+
+    # 4. Logique de validation si un import CSV est en attente
+    new_col_name = "Nouveau Nom du Comité Local Pour l'Emploi"
+    base_col_name = "Nom du Comité Local Pour l'Emploi"
+    
+    if new_col_name in st.session_state.df_main.columns:
+        st.warning("🔄 Une mise à jour par CSV est en attente.")
+        if st.button("✅ Fusionner l'import CSV dans la colonne officielle"):
+            mask = st.session_state.df_main[new_col_name] != ""
+            st.session_state.df_main.loc[mask, base_col_name] = st.session_state.df_main.loc[mask, new_col_name]
+            st.session_state.df_main = st.session_state.df_main.drop(columns=[new_col_name])
+            st.success("Fusion terminée !")
+            st.rerun()
+
+else:
+    # Mode Lecture seule pour les utilisateurs classiques
+    st.info("Mode lecture seule. Saisissez le code en barre latérale pour modifier les données.")
+    st.dataframe(df_display, use_container_width=True)
+    
 # --- FILTRAGE FINAL ---
 df_display = st.session_state.df_main.copy()
 if region_filter:
