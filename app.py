@@ -42,19 +42,27 @@ if uploaded_file:
         col1, col2 = "Code commune Insee", "Nom du Comité Local Pour l'Emploi"
 
         if col1 in df_upload.columns and col2 in df_upload.columns:
-            st.success("✅ Fichier conforme ! Les colonnes ont été détectées.")
+            st.success("✅ Fichier conforme !")
             if st.button("🚀 Appliquer la mise à jour des noms"):
-                st.session_state.df_main = st.session_state.df_main.merge(
+                # --- ACTION CRUCIALE ICI ---
+                # On crée le nouveau dataframe avec la fusion
+                updated_df = st.session_state.df_main.merge(
                     df_upload[[col1, col2]], on=col1, how='left', suffixes=('', '_nouveau')
                 )
-                st.session_state.df_main.rename(columns={f"{col2}_nouveau": f"Nouveau {col2}"}, inplace=True)
+                
+                # On renomme la nouvelle colonne
+                updated_df.rename(columns={f"{col2}_nouveau": "Nouveau Nom du Comité Local Pour l'Emploi"}, inplace=True)
+                
+                # ON MET À JOUR LA SESSION STATE (C'est ce qui permet au tableau du bas de voir le changement)
+                st.session_state.df_main = updated_df
+                
                 st.balloons()
-                st.success("Données fusionnées avec succès dans la nouvelle colonne !")
+                st.success("Mise à jour effectuée ! Regardez le tableau ci-dessous.")
         else:
-            st.error(f"❌ Colonnes manquantes. Votre fichier contient : {list(df_upload.columns)}")
-            st.info(f"Le fichier doit contenir exactement : **{col1}** et **{col2}**")
+            st.error(f"Colonnes manquantes : {list(df_upload.columns)}")
     except Exception as e:
-        st.error(f"Erreur lors de la lecture : {e}")
+        st.error(f"Erreur : {e}")
+    
 
 # --- FILTRAGE FINAL ---
 df_display = st.session_state.df_main.copy()
