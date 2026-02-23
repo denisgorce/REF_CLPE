@@ -19,18 +19,30 @@ if 'df_main' not in st.session_state:
 # --- 2. BARRE LATÉRALE (Filtres & Admin) ---
 with st.sidebar:
     st.header("🔐 Administration")
-    admin_code = st.text_input("Code Administrateur", type="password", help="Saisissez RPE_REFCLPE pour éditer")
+    
+    # On utilise une clé (key) pour pouvoir manipuler le champ mot de passe
+    admin_code = st.text_input(
+        "Code Administrateur", 
+        type="password", 
+        help="Saisissez RPE_REFCLPE pour éditer",
+        key="input_admin_code" 
+    )
+    
     is_admin = (admin_code == "RPE_REFCLPE")
     
     if is_admin:
         st.success("🔓 Mode Admin activé")
+        # Bouton pour sortir du mode admin
+        if st.button("🚪 Se déconnecter du mode éditeur"):
+            # On vide le champ dans le session_state
+            st.session_state.input_admin_code = ""
+            st.rerun()
     else:
         st.info("🔒 Mode Consultation")
 
     st.divider()
     st.header("🔍 Filtres d'affichage")
-    regions = st.multiselect("Régions", options=sorted(st.session_state.df_main["Libellé Région"].unique()))
-    depts = st.multiselect("Départements", options=sorted(st.session_state.df_main["Libellé Département"].unique()))
+    # ... (reste de vos filtres multiselect)
 
 # --- 3. CALCUL DU TABLEAU FILTRÉ ---
 df_display = st.session_state.df_main.copy()
