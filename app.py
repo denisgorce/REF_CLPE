@@ -25,44 +25,84 @@ dept_filter = st.sidebar.multiselect("Filtrer par Département", options=st.sess
 
 # --- SECTION UPLOAD ---
 st.subheader("📥 Mise à jour via CSV")
-with st.expander("❓ Comment mettre à jour les noms ?"):
+
+# Petit guide d'aide pour l'utilisateur
+with st.expander("❓ Guide : Comment préparer votre fichier ?"):
     st.write("""
-    1. **Exportez** les données en bas de page en cochant au minimum 'Code commune Insee' et 'Nom du Comité Local Pour l'Emploi'.
-    2. **Ouvrez** le fichier dans Excel et modifiez les noms dans la colonne 'Nom du Comité Local Pour l'Emploi'.
-    3. **Enregistrez** et **Uploadez** le fichier ici.
+    - Utilisez un fichier **CSV** (séparateur point-virgule ou virgule).
+    - Le fichier doit contenir au moins ces deux colonnes exactement : 
+      **'Code commune Insee'** et **'Nom du Comité Local Pour l'Emploi'**.
+    - L'application fera correspondre les noms grâce au code INSEE.
     """)
 
-uploaded_file = st.file_uploader("Choisir un fichier CSV", type="csv")
+uploaded_file = st.file_uploader("Choisir un fichier CSV pour la mise à jour", type="csv")
 
 if uploaded_file:
     try:
-        df_upload = pd.read_csv(uploaded_file, sep=None, engine='python', dtype={"Code commune Insee": str}, encoding='utf-8-sig')
+        # 1. Lecture du fichier avec détection automatique
+        df_upload = pd.read_csv(
+            uploaded_file, 
+            sep=None, 
+            engine='python', 
+            dtype={"Code commune Insee": str}, 
+            encoding='utf-8-sig'
+        )
+        
+        # Nettoyage des noms de colonnes (espaces superflus)
         df_upload.columns = df_upload.columns.str.strip()
 
-        col1, col2 = "Code commune Insee", "Nom du Comité Local Pour l'Emploi"
+        # Définition des noms de colonnes cibles
+        col_insee = "Code commune Insee"
+        col_nom = "Nom du Comité Local Pour l'Emploi"
+        new_col_name = "Nouveau Nom du Comité Local Pour l'Emploi"
 
-        if col1 in df_upload.columns and col2 in df_upload.columns:
-            st.success("✅ Fichier conforme !")
-            if st.button("🚀 Appliquer la mise à jour des noms"):
-                # --- ACTION CRUCIALE ICI ---
-                # On crée le nouveau dataframe avec la fusion
+        # 2. Test de conformité des colonnes
+        if col_insee in df_upload.columns and col_nom in df_upload.columns:
+            st.success(f"✅ Fichier conforme ! {len(df_upload)} lignes prêtes pour la mise à jour.")
+            
+            # Aperçu des données pour rassurer l'utilisateur
+            with st.expander("👁️ Aperçu des données détectées"):
+                st.dataframe(df_upload[[col_insee, col_nom]].head(10))
+
+            # 3. Bouton d'action pour déclencher la fusion
+            if st.button("🚀 Lancer la mise à jour de la base"):
+                
+                # --- PROTECTION ANTI-DOUBLONS ---
+                # Si la colonne de mise à jour existe déjà, on la supprime avant de recommencer
+                if new_col_name in st.session_state.df_main.columns:
+                    st.session_state.df_main = st.session_state.df_main.drop(columns=[new_col_name])
+                
+                # Fusion des données (Left Join)
                 updated_df = st.session_state.df_main.merge(
-                    df_upload[[col1, col2]], on=col1, how='left', suffixes=('', '_nouveau')
+                    df_upload[[col_insee, col_nom]], 
+                    on=col_insee, 
+                    how='left', 
+                    suffixes=('', '_nouveau')
                 )
                 
-                # On renomme la nouvelle colonne
-                updated_df.rename(columns={f"{col2}_nouveau": "Nouveau Nom du Comité Local Pour l'Emploi"}, inplace=True)
+                # Renommage et nettoyage des valeurs vides (NaN)
+                updated_df.rename(columns={f"{col_nom}_nouveau": new_col_name}, inplace=True)
+                updated_df[new_col_name] = updated_df[new_col_name].fillna("")
                 
-                # ON MET À JOUR LA SESSION STATE (C'est ce qui permet au tableau du bas de voir le changement)
+                # Sauvegarde dans la mémoire de l'application
                 st.session_state.df_main = updated_df
                 
+                # Feedback visuel final
                 st.balloons()
-                st.success("Mise à jour effectuée ! Regardez le tableau ci-dessous.")
+                st.info(f"✨ Mise à jour terminée. La colonne '{new_col_name}' est maintenant disponible dans le tableau ci-dessous.")
+        
         else:
-            st.error(f"Colonnes manquantes : {list(df_upload.columns)}")
+            # Message d'erreur si les colonnes ne correspondent pas
+            st.error("❌ Erreur de format : Colonnes obligatoires introuvables.")
+            st.markdown(f"""
+            L'application a trouvé les colonnes suivantes : `{list(df_upload.columns)}`  
+            Veuillez renommer vos colonnes en :  
+            - **{col_insee}** - **{col_nom}**
+            """)
+            
     except Exception as e:
-        st.error(f"Erreur : {e}")
-    
+        st.error(f"⚠️ Une erreur technique est survenue lors de la lecture : {e}")
+        
 
 # --- FILTRAGE FINAL ---
 df_display = st.session_state.df_main.copy()
