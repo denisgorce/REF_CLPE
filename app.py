@@ -5,7 +5,6 @@ st.set_page_config(page_title="Référentiel CLPE", layout="wide", initial_sideb
 
 # --- 1. INITIALISATION DES DONNÉES ---
 if 'df_main' not in st.session_state:
-    # Ici, vous pourrez remplacer par : st.session_state.df_main = pd.read_csv("votre_base.csv")
     data = {
         "Code Région": ["11", "24", "44", "32"],
         "Libellé Région": ["Île-de-France", "Centre-Val de Loire", "Grand Est", "Hauts-de-France"],
@@ -17,32 +16,43 @@ if 'df_main' not in st.session_state:
     st.session_state.df_main = pd.DataFrame(data)
 
 # --- 2. BARRE LATÉRALE (Filtres & Admin) ---
+# INITIALISATION DES VARIABLES DE FILTRE (Pour éviter le NameError)
+regions = []
+depts = []
+
 with st.sidebar:
     st.header("🔐 Administration")
     
-    # On utilise une clé (key) pour pouvoir manipuler le champ mot de passe
+    # Utilisation d'une clé pour le widget
     admin_code = st.text_input(
         "Code Administrateur", 
         type="password", 
-        help="Saisissez RPE_REFCLPE pour éditer",
-        key="input_admin_code" 
+        key="admin_input"
     )
     
     is_admin = (admin_code == "RPE_REFCLPE")
     
     if is_admin:
         st.success("🔓 Mode Admin activé")
-        # Bouton pour sortir du mode admin
-        if st.button("🚪 Se déconnecter du mode éditeur"):
-            # On vide le champ dans le session_state
-            st.session_state.input_admin_code = ""
+        if st.button("🚪 Se déconnecter"):
+            # Pour vider le champ, on réinitialise la clé dans le session_state
+            st.session_state.admin_input = ""
             st.rerun()
     else:
         st.info("🔒 Mode Consultation")
 
     st.divider()
     st.header("🔍 Filtres d'affichage")
-    # ... (reste de vos filtres multiselect)
+    
+    # On assigne les valeurs aux variables déjà créées plus haut
+    regions = st.multiselect(
+        "Filtrer par Région", 
+        options=sorted(st.session_state.df_main["Libellé Région"].unique())
+    )
+    depts = st.multiselect(
+        "Filtrer par Département", 
+        options=sorted(st.session_state.df_main["Libellé Département"].unique())
+    )
 
 # --- 3. CALCUL DU TABLEAU FILTRÉ ---
 df_display = st.session_state.df_main.copy()
@@ -50,8 +60,7 @@ if regions:
     df_display = df_display[df_display["Libellé Région"].isin(regions)]
 if depts:
     df_display = df_display[df_display["Libellé Département"].isin(depts)]
-
-st.title("📍 Gestion du Référentiel CLPE")
+    
 
 # --- 4. ZONE D'UPLOAD (Mise à jour massive) ---
 st.subheader("📥 Mise à jour par fichier CSV")
