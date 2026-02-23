@@ -7,7 +7,6 @@ st.title("📍 Interface de gestion des Comités Locaux Pour l'Emploi")
 
 # --- INITIALISATION DES DONNÉES ---
 if 'df_main' not in st.session_state:
-    # Création d'un jeu de données de test pour ne pas avoir une interface vide
     data = {
         "Code Région": ["11", "24"],
         "Libellé Région": ["Île-de-France", "Centre-Val de Loire"],
@@ -26,27 +25,36 @@ dept_filter = st.sidebar.multiselect("Filtrer par Département", options=st.sess
 
 # --- SECTION UPLOAD ---
 st.subheader("📥 Mise à jour via CSV")
-st.info("Le fichier doit avoir 2 colonnes : 'Code commune Insee' et 'Nom du Comité Local Pour l'Emploi'")
+with st.expander("❓ Comment mettre à jour les noms ?"):
+    st.write("""
+    1. **Exportez** les données en bas de page en cochant au minimum 'Code commune Insee' et 'Nom du Comité Local Pour l'Emploi'.
+    2. **Ouvrez** le fichier dans Excel et modifiez les noms dans la colonne 'Nom du Comité Local Pour l'Emploi'.
+    3. **Enregistrez** et **Uploadez** le fichier ici.
+    """)
+
 uploaded_file = st.file_uploader("Choisir un fichier CSV", type="csv")
 
 if uploaded_file:
-    # On ajoute sep=None et engine='python' pour qu'il détecte automatiquement si c'est une virgule ou un point-virgule
-    df_upload = pd.read_csv(uploaded_file, sep=None, engine='python', dtype={"Code commune Insee": str})
-       
-    if st.button("Appliquer la mise à jour"):
-        # Ce qui est ci-dessous est décalé de deux niveaux (8 espaces)
-        st.session_state.df_main = st.session_state.df_main.merge(
-            df_upload[["Code commune Insee", "Nom du Comité Local Pour l'Emploi"]], 
-            on="Code commune Insee", 
-            how="left", 
-            suffixes=("", "_nouveau")
-        )
-        
-        st.session_state.df_main.rename(
-            columns={"Nom du Comité Local Pour l'Emploi_nouveau": "Nouveau Nom du Comité Local Pour l'Emploi"}, 
-            inplace=True
-        )
-        st.success("Mise à jour terminée avec succès !")
+    try:
+        df_upload = pd.read_csv(uploaded_file, sep=None, engine='python', dtype={"Code commune Insee": str}, encoding='utf-8-sig')
+        df_upload.columns = df_upload.columns.str.strip()
+
+        col1, col2 = "Code commune Insee", "Nom du Comité Local Pour l'Emploi"
+
+        if col1 in df_upload.columns and col2 in df_upload.columns:
+            st.success("✅ Fichier conforme ! Les colonnes ont été détectées.")
+            if st.button("🚀 Appliquer la mise à jour des noms"):
+                st.session_state.df_main = st.session_state.df_main.merge(
+                    df_upload[[col1, col2]], on=col1, how='left', suffixes=('', '_nouveau')
+                )
+                st.session_state.df_main.rename(columns={f"{col2}_nouveau": f"Nouveau {col2}"}, inplace=True)
+                st.balloons()
+                st.success("Données fusionnées avec succès dans la nouvelle colonne !")
+        else:
+            st.error(f"❌ Colonnes manquantes. Votre fichier contient : {list(df_upload.columns)}")
+            st.info(f"Le fichier doit contenir exactement : **{col1}** et **{col2}**")
+    except Exception as e:
+        st.error(f"Erreur lors de la lecture : {e}")
 
 # --- FILTRAGE FINAL ---
 df_display = st.session_state.df_main.copy()
@@ -56,39 +64,31 @@ if dept_filter:
     df_display = df_display[df_display["Libellé Département"].isin(dept_filter)]
 
 # --- AFFICHAGE ET EXPORT ---
+st.divider()
 st.subheader("📊 Visualisation et Exportation")
 
-# 1. Choix des colonnes à exporter
 all_columns = df_display.columns.tolist()
 default_export_cols = ["Code commune Insee", "Nom du Comité Local Pour l'Emploi"]
-
-# On vérifie que les colonnes par défaut existent avant de les suggérer
 suggested_cols = [c for c in default_export_cols if c in all_columns]
 
-export_cols = st.multiselect(
-    "Sélectionnez les variables à inclure dans l'export :",
-    options=all_columns,
-    default=suggested_cols
-)
+export_cols = st.multiselect("Sélectionnez les colonnes à exporter :", options=all_columns, default=suggested_cols)
 
-# 2. Affichage du tableau filtré par colonnes
 if export_cols:
-    st.dataframe(df_display[export_cols], use_container_width=True)
+    # --- MESSAGE D'AIDE SUR L'EXPORT ---
+    if set(default_export_cols).issubset(set(export_cols)):
+        st.info("💡 **Sélection optimale** : Ce fichier pourra être ré-uploadé pour mise à jour.")
+    else:
+        st.warning("⚠️ **Attention** : Il manque des colonnes clés pour permettre une mise à jour future via ce fichier.")
 
-    # 3. Bouton d'exportation
+    st.dataframe(df_display[export_cols], use_container_width=True)
+    
     csv_export = df_display[export_cols].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     
-    # Message d'aide contextuel
-    if set(default_export_cols).issubset(set(export_cols)):
-        st.info("💡 Votre sélection inclut les colonnes nécessaires pour une mise à jour ultérieure.")
-    else:
-        st.warning("⚠️ Pour pouvoir ré-uploader ce fichier plus tard, assurez-vous d'inclure 'Code commune Insee' et 'Nom du Comité Local Pour l'Emploi'.")
-
     st.download_button(
-        label=f"📥 Télécharger l'export ({len(export_cols)} colonnes)",
+        label="📥 Télécharger le fichier pour Excel (Accents préservés)",
         data=csv_export,
-        file_name='export_personnalise_cle.csv',
+        file_name='export_cle_france.csv',
         mime='text/csv',
     )
 else:
-    st.warning("Veuillez sélectionner au moins une colonne pour visualiser et exporter les données.")
+    st.info("Veuillez sélectionner au moins une colonne pour afficher les données.")
