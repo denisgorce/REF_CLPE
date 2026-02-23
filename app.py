@@ -67,28 +67,39 @@ if dept_filter:
 st.divider()
 st.subheader("📊 Visualisation et Exportation")
 
+# 1. On récupère la liste de toutes les colonnes actuelles
 all_columns = df_display.columns.tolist()
-default_export_cols = ["Code commune Insee", "Nom du Comité Local Pour l'Emploi"]
-suggested_cols = [c for c in default_export_cols if c in all_columns]
 
-export_cols = st.multiselect("Sélectionnez les colonnes à exporter :", options=all_columns, default=suggested_cols)
+# 2. On définit les colonnes que l'on veut cocher par défaut pour l'export
+key_cols = ["Code commune Insee", "Nom du Comité Local Pour l'Emploi"]
+# On s'assure qu'elles existent dans le DataFrame avant de les proposer
+default_cols = [c for c in key_cols if c in all_columns]
 
-if export_cols:
-    # --- MESSAGE D'AIDE SUR L'EXPORT ---
-    if set(default_export_cols).issubset(set(export_cols)):
-        st.info("💡 **Sélection optimale** : Ce fichier pourra être ré-uploadé pour mise à jour.")
-    else:
-        st.warning("⚠️ **Attention** : Il manque des colonnes clés pour permettre une mise à jour future via ce fichier.")
+# 3. Le sélecteur pour l'export (pré-rempli avec les 2 colonnes clés)
+export_selection = st.multiselect(
+    "Quelles colonnes souhaitez-vous exporter ?",
+    options=all_columns,
+    default=default_cols,
+    help="Par défaut, les colonnes nécessaires à la mise à jour sont sélectionnées."
+)
 
-    st.dataframe(df_display[export_cols], use_container_width=True)
-    
-    csv_export = df_display[export_cols].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+# 4. AFFICHAGE VISUEL : On affiche TOUT le tableau pour le confort de l'utilisateur
+st.write("Aperçu complet des données :")
+st.dataframe(df_display, use_container_width=True)
+
+# 5. LOGIQUE D'EXPORT : Uniquement les colonnes cochées dans le multiselect
+if export_selection:
+    csv_export = df_display[export_selection].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     
     st.download_button(
-        label="📥 Télécharger le fichier pour Excel (Accents préservés)",
+        label=f"📥 Télécharger l'export ({len(export_selection)} colonnes)",
         data=csv_export,
-        file_name='export_cle_france.csv',
+        file_name='export_cle_selection.csv',
         mime='text/csv',
     )
+    
+    # Message de rappel si l'utilisateur décoche les colonnes vitales
+    if not set(key_cols).issubset(set(export_selection)):
+        st.warning("⚠️ Attention : Votre sélection actuelle ne permet pas de réaliser une mise à jour par upload plus tard.")
 else:
-    st.info("Veuillez sélectionner au moins une colonne pour afficher les données.")
+    st.info("Sélectionnez au moins une colonne ci-dessus pour activer le bouton de téléchargement.")
