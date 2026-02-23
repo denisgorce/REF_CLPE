@@ -10,6 +10,7 @@ st.set_page_config(
 
 # --- 1. INITIALISATION DES DONNÉES (SESSION STATE) ---
 if 'df_main' not in st.session_state:
+    # Données initiales (structure de référence)
     data = {
         "Code Région": ["11", "24", "44", "32"],
         "Libellé Région": ["Île-de-France", "Centre-Val de Loire", "Grand Est", "Hauts-de-France"],
@@ -25,6 +26,11 @@ if 'df_main' not in st.session_state:
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
+# Noms des colonnes clés pour cohérence dans tout le code
+c_insee = "Code commune Insee"
+c_nom = "Nom du Comité Local Pour l'Emploi"
+new_col = "Nouveau Nom du Comité Local Pour l'Emploi"
+
 # --- 2. BARRE LATÉRALE (CONNEXION & FILTRES) ---
 regions = []
 depts = []
@@ -39,7 +45,6 @@ with st.sidebar:
         if st.button("Se connecter"):
             if admin_code == "RPE_REFCLPE":
                 st.session_state.authenticated = True
-                st.success("Accès autorisé")
                 st.rerun()
             else:
                 st.error("Code incorrect")
@@ -55,7 +60,7 @@ with st.sidebar:
     
     # Filtres
     st.header("🔍 Filtres d'affichage")
-    st.info("💡 Ces filtres impactent uniquement la vue 'Visualisation' et l'export.")
+    st.info("💡 Ces filtres impactent la vue 'Visualisation' et l'export CSV.")
     regions = st.multiselect(
         "Filtrer par Région", 
         options=sorted(st.session_state.df_main["Libellé Région"].unique())
@@ -79,28 +84,26 @@ st.subheader("📥 Mise à jour via fichier CSV")
 
 # AIDE UTILISATEUR UPLOAD
 with st.expander("❓ Guide : Comment effectuer une mise à jour de masse ?"):
-    st.markdown("""
-    **Étape 1 :** Exportez la table actuelle en utilisant les colonnes `Code commune Insee` et `Nom du Comité Local Pour l'Emploi`.  
-    **Étape 2 :** Modifiez les noms dans votre tableur (Excel, LibreOffice).  
+    st.markdown(f"""
+    **Étape 1 :** Exportez la table actuelle (en bas de page) avec au moins les colonnes `{c_insee}` et `{c_nom}`.  
+    **Étape 2 :** Modifiez les noms dans votre tableur (Excel).  
     **Étape 3 :** Déposez le fichier modifié ci-dessous.  
-    **Étape 4 :** Cliquez sur **Préparer la fusion**. Une colonne de contrôle apparaîtra.  
-    **Étape 5 :** Un administrateur devra ensuite valider définitivement les changements en bas de page.
+    **Étape 4 :** Cliquez sur le bouton bleu **'Ajoute un Nouveau Nom...'**. Cela crée une colonne de test.  
+    **Étape 5 :** L'administrateur valide ensuite le remplacement définitif en bas de page.
     """)
 
 uploaded_file = st.file_uploader("Déposer le CSV de mise à jour (Séparateur ';' ou ',')", type="csv")
 
 if uploaded_file:
     try:
-        df_up = pd.read_csv(uploaded_file, sep=None, engine='python', dtype={"Code commune Insee": str}, encoding='utf-8-sig')
+        df_up = pd.read_csv(uploaded_file, sep=None, engine='python', dtype={c_insee: str}, encoding='utf-8-sig')
         df_up.columns = df_up.columns.str.strip()
-        
-        c_insee, c_nom = "Code commune Insee", "Nom du Comité Local Pour l'Emploi"
-        new_col = "Nouveau Nom du Comité Local Pour l'Emploi"
 
         if c_insee in df_up.columns and c_nom in df_up.columns:
             st.success(f"✅ Fichier conforme : {len(df_up)} lignes détectées.")
             
-            if st.button("🔄 Préparer la fusion"):
+            if st.button(f"🔄 Ajoute un {new_col}"):
+                # Nettoyage si une version précédente existe
                 if new_col in st.session_state.df_main.columns:
                     st.session_state.df_main.drop(columns=[new_col], inplace=True)
                 
@@ -111,68 +114,73 @@ if uploaded_file:
                 st.session_state.df_main.rename(columns={f"{c_nom}_nouveau": new_col}, inplace=True)
                 st.session_state.df_main[new_col] = st.session_state.df_main[new_col].fillna("")
                 
-                # Message d'étape crucial
-                st.warning(f"🔔 **Données chargées** : Les modifications sont visibles dans la colonne `{new_col}`. Elles sont en attente de validation définitive par l'administrateur.")
+                st.warning(f"🔔 **Données en attente** : La table a été mise à jour avec la variable `{new_col}`. Un administrateur doit maintenant valider le remplacement définitif.")
                 st.rerun()
         else:
-            st.error(f"❌ Format invalide. Colonnes attendues : '{c_insee}' et '{c_nom}'.")
+            st.error(f"❌ Colonnes attendues non trouvées. Vérifiez que votre fichier contient bien : '{c_insee}' et '{c_nom}'.")
     except Exception as e:
-        st.error(f"⚠️ Erreur lors de la lecture du fichier : {e}")
+        st.error(f"⚠️ Erreur lors de la lecture : {e}")
 
 # --- 5. VISUALISATION ET ÉDITION ---
 st.divider()
+
 if is_admin:
     st.subheader("✍️ Zone d'Édition Directe (Admin)")
-    st.info("📝 En mode Admin, vous pouvez modifier directement les valeurs dans les cellules du tableau. N'oubliez pas d'enregistrer vos modifications manuelles.")
+    st.info("📝 Mode Admin : Vous pouvez modifier les noms directement dans le tableau. Pensez à 'Enregistrer les modifications manuelles'.")
     
-    # Détection d'un import en attente
-    new_c = "Nouveau Nom du Comité Local Pour l'Emploi"
-    if new_c in st.session_state.df_main.columns:
-        st.error(f"📢 **Action requise** : Un import CSV est en attente de validation pour la colonne `{new_c}`.")
+    # Alerte spécifique si une fusion CSV est en attente
+    if new_col in st.session_state.df_main.columns:
+        st.error(f"📢 **IMPORT EN ATTENTE** : Une colonne `{new_col}` est présente. Voulez-vous remplacer officiellement les anciens noms ?")
 
+    # Éditeur de données
     edited_df = st.data_editor(st.session_state.df_main, use_container_width=True, num_rows="dynamic")
     
     col_a, col_b = st.columns(2)
     with col_a:
         if st.button("💾 Enregistrer les modifications manuelles"):
             st.session_state.df_main = edited_df
-            st.success("Les modifications manuelles ont été enregistrées en base.")
+            st.success("Modifications enregistrées en base.")
             st.rerun()
     with col_b:
-        if new_c in st.session_state.df_main.columns:
-            if st.button("✅ Valider l'import CSV (Écrasement définitif)"):
-                base_c = "Nom du Comité Local Pour l'Emploi"
-                mask = st.session_state.df_main[new_c] != ""
-                st.session_state.df_main.loc[mask, base_c] = st.session_state.df_main.loc[mask, new_c]
-                st.session_state.df_main.drop(columns=[new_c], inplace=True)
+        if new_col in st.session_state.df_main.columns:
+            if st.button("✅ Valider définitivement le remplacement des noms"):
+                # Masque pour ne remplacer que là où on a fourni un nouveau nom
+                mask = st.session_state.df_main[new_col] != ""
+                st.session_state.df_main.loc[mask, c_nom] = st.session_state.df_main[new_col]
+                # On supprime la colonne temporaire
+                st.session_state.df_main.drop(columns=[new_col], inplace=True)
                 st.balloons()
-                st.success("La base officielle a été mise à jour avec les nouveaux noms.")
+                st.success("Mise à jour officielle terminée.")
                 st.rerun()
 else:
     st.subheader("📊 Visualisation des données")
-    st.info("💡 Utilisez la barre latérale pour filtrer les résultats. L'édition est réservée aux administrateurs.")
+    st.info("💡 Consultez le référentiel ci-dessous. Pour toute modification, connectez-vous via la barre latérale.")
     st.dataframe(df_display, use_container_width=True)
 
 # --- 6. EXPORTATION ---
 st.divider()
-st.subheader("📥 Exportation personnalisée")
+st.subheader("📥 Exportation")
 with st.expander("ℹ️ Aide à l'export"):
-    st.write("Le fichier généré est au format CSV (séparateur ';'), compatible avec Microsoft Excel.")
+    st.write("Le fichier CSV généré utilise le point-virgule (;) comme séparateur pour une compatibilité parfaite avec Excel France.")
 
 all_cols = df_display.columns.tolist()
-# Présélection automatique des colonnes vitales
-default_export = ["Code commune Insee", "Nom du Comité Local Pour l'Emploi"]
-if "Nouveau Nom du Comité Local Pour l'Emploi" in all_cols:
-    default_export.append("Nouveau Nom du Comité Local Pour l'Emploi")
+# Présélection intelligente
+default_export = [c_insee, c_nom]
+if new_col in all_cols:
+    default_export.append(new_col)
 
 export_sel = st.multiselect(
     "Sélectionnez les colonnes à exporter :", 
     options=all_cols, 
     default=[c for c in default_export if c in all_cols],
-    help="Par défaut, les colonnes nécessaires à une future mise à jour sont cochées."
+    help="Les colonnes nécessaires au ré-import sont cochées par défaut."
 )
 
 if export_sel:
+    # Message de prévention
+    if c_insee not in export_sel:
+        st.warning(f"⚠️ N'oubliez pas d'inclure '{c_insee}' si vous prévoyez de ré-importer ce fichier plus tard.")
+        
     csv = df_display[export_sel].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     st.download_button(
         label=f"📥 Télécharger le CSV ({len(df_display)} lignes)", 
