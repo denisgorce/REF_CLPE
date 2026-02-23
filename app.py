@@ -30,18 +30,18 @@ st.info("Le fichier doit avoir 2 colonnes : 'Code commune Insee' et 'Nom du Comi
 uploaded_file = st.file_uploader("Choisir un fichier CSV", type="csv")
 
 if uploaded_file:
-    # Lecture en forçant le format texte pour les codes INSEE (évite de perdre le '0' au début)
-    df_upload = pd.read_csv(uploaded_file, dtype={'Code commune Insee': str})
+    # Ce qui est ci-dessous est décalé d'un niveau (4 espaces)
+    df_upload = pd.read_csv(uploaded_file, dtype={"Code commune Insee": str})
     
-   if st.button("Appliquer la mise à jour"):
-        # On utilise des guillemets doubles " " car il y a une apostrophe dans le nom de la colonne
+    if st.button("Appliquer la mise à jour"):
+        # Ce qui est ci-dessous est décalé de deux niveaux (8 espaces)
         st.session_state.df_main = st.session_state.df_main.merge(
             df_upload[["Code commune Insee", "Nom du Comité Local Pour l'Emploi"]], 
             on="Code commune Insee", 
             how="left", 
             suffixes=("", "_nouveau")
         )
-        # Idem pour le renommage ici
+        
         st.session_state.df_main.rename(
             columns={"Nom du Comité Local Pour l'Emploi_nouveau": "Nouveau Nom du Comité Local Pour l'Emploi"}, 
             inplace=True
