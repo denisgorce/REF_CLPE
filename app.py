@@ -103,6 +103,17 @@ st.markdown("---")
 st.subheader("📥 Mise à jour du référentiel")
 
 with st.expander("❓ Guide complet : Comment importer vos modifications ?"):
+    # TOUTE LA LOGIQUE MAILTO EST DÉSORMAIS ICI
+    destinataire = "denis.gorce@francetravail.fr"
+    sujet = "Mise à jour du référentiel CLPE"
+    corps_email = (
+        "Bonjour, je souhaiterais apporter les modifications suivantes au référentiel des CLPE :\n\n"
+        "- Ajout des communes suivantes et nom du CLPE de rattachement (mettre le code Insee et le nom du CLPE associé).\n"
+        "- Modification du nom d'un CLPE (mettre le nom actuel et le nom souhaité).\n"
+        "- Modification d'affectation des communes à un CLPE (mettre les codes commune Insee concernées et le nouveau nom du CLPE associé)."
+    )
+    # Encodage spécifique pour l'URL
+    mail_url = f"mailto:{destinataire}?subject={urllib.parse.quote(sujet)}&body={urllib.parse.quote(corps_email)}"
     st.markdown(f"""
     **Format du fichier CSV attendu :**
     - **Colonne 1** : Doit contenir le **{C_INSEE}** (ex: 75001).
@@ -112,7 +123,21 @@ with st.expander("❓ Guide complet : Comment importer vos modifications ?"):
     **Règles de traitement selon votre profil :**
     1. **Utilisateur (Standard)** : Votre e-mail est obligatoire. Le fichier remplit la colonne *{C_NOUVEAU_NOM}* et la date de demande, en attente de validation.
     2. **Administrateur** : L'e-mail n'est pas requis. Le fichier met à jour **directement** la colonne *{C_NOM_OFFICIEL}* et horodate la *Date de mise à jour admin*. L'admin peut également créer de nouveaux codes Insee via l'import.
+    """---
+    **Une difficulté ou une demande spécifique ?**
+    Si vous ne parvenez pas à utiliser l'outil de chargement ou si votre demande concerne :
+    - L'ajout de nouveaux codes commune Insee.
+    - La modification de l'affectation d'une commune.
+    - Un changement de nom complexe.
+    
+    Veuillez cliquer sur le bouton ci-dessous pour nous envoyer un e-mail pré-rempli :
     """)
+    
+    st.link_button(
+        "📧 Contactez le support (Help)", 
+        mail_url, 
+        help="Vous ne parvenez pas à utiliser l'outil de chargement de fichier ou votre demande concerne l'ajout de codes commune."
+    )
 
 col_mail, col_file = st.columns([1, 2])
 with col_mail:
@@ -170,31 +195,6 @@ if up_file and email_valid:
 elif up_file and not email_valid:
     st.warning("ℹ️ Veuillez renseigner un e-mail valide pour soumettre vos modifications.")
 
-# --- BOUTON D'ASSISTANCE PAR E-MAIL ---
-st.markdown("---")
-st.subheader("🆘 Besoin d'aide ?")
-
-# Construction des composants de l'email
-destinataire = "denis.gorce@francetravail.fr"
-sujet = "Mise à jour du référentiel CLPE"
-corps_email = (
-    "Bonjour, je souhaiterais apporter les modifications suivantes au référentiel des CLPE :\n\n"
-    "- Ajout des communes suivantes et nom du CLPE de rattachement (mettre le code Insee et le nom du CLPE associé).\n"
-    "- Modification du nom d'un CLPE (mettre le nom actuel et le nom souhaité).\n"
-    "- Modification d'affectation des communes à un CLPE (mettre les codes commune Insee concernées et le nouveau nom du CLPE associé)."
-)
-
-# Encodage de l'URL pour gérer les espaces et caractères spéciaux
-import urllib.parse
-mail_url = f"mailto:{destinataire}?subject={urllib.parse.quote(sujet)}&body={urllib.parse.quote(corps_email)}"
-
-# Création du bouton avec infobulle
-st.link_button(
-    "📧 Contactez le support (Help)", 
-    mail_url, 
-    help="Vous ne parvenez pas à utiliser l'outil de chargement de fichier ou votre demande concerne l'ajout de codes commune.",
-    use_container_width=True
-)
 
 # --- 5. VISUALISATION ET ÉDITION ---
 st.divider()
