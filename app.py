@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 from datetime import datetime
-import urllib.parse  # Import ajouté pour corriger la NameError
+import urllib.parse  # Essentiel pour le lien e-mail
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -53,11 +53,9 @@ if 'df_main' not in st.session_state:
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
-# Clé dynamique pour purger l'uploader après traitement
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = 0
 
-# Stockage des sauvegardes horodatées
 if 'backups' not in st.session_state:
     st.session_state.backups = {}
 
@@ -82,12 +80,11 @@ with st.sidebar:
 
     st.divider()
     st.header("🔍 Filtres d'affichage")
-    f_reg = st.multiselect(C_REG_LIB, options=sorted(st.session_state.df_main[C_REG_LIB].unique()), key="perm_reg", help="Filtrer les données par région.")
-    f_dept = st.multiselect(C_DEPT_LIB, options=sorted(st.session_state.df_main[C_DEPT_LIB].unique()), key="perm_dept", help="Filtrer les données par département.")
+    f_reg = st.multiselect(C_REG_LIB, options=sorted(st.session_state.df_main[C_REG_LIB].unique()), key="perm_reg", help="Filtre les lignes affichées selon la région.")
+    f_dept = st.multiselect(C_DEPT_LIB, options=sorted(st.session_state.df_main[C_DEPT_LIB].unique()), key="perm_dept", help="Filtre les lignes affichées selon le département.")
     
-    # RETOUR DU FILTRE CONTACT
     contacts_list = sorted([c for c in st.session_state.df_main[C_CONTACT].unique() if c != ""])
-    f_contact = st.multiselect("Filtrer par Contact (Auteur)", options=contacts_list, key="perm_contact", help="Affiche uniquement les propositions soumises par cet e-mail.")
+    f_contact = st.multiselect("Filtrer par Contact (Auteur)", options=contacts_list, key="perm_contact", help="Affiche uniquement les propositions soumises par cet e-mail spécifique.")
 
 # --- 3. LOGIQUE DE FILTRAGE ---
 df_display = st.session_state.df_main.copy()
@@ -104,128 +101,122 @@ st.markdown("---")
 st.subheader("📥 Mise à jour du référentiel")
 
 with st.expander("❓ Guide complet : Comment importer vos modifications ?"):
-    # TOUTE LA LOGIQUE MAILTO EST ICI
     destinataire = "denis.gorce@francetravail.fr"
     sujet = "Mise à jour du référentiel CLPE"
     corps_email = (
         "Bonjour, je souhaiterais apporter les modifications suivantes au référentiel des CLPE :\n\n"
-        "- Ajout des communes suivantes et nom du CLPE de rattachement (mettre le code Insee et le nom du CLPE associé).\n"
-        "- Modification du nom d'un CLPE (mettre le nom actuel et le nom souhaité).\n"
-        "- Modification d'affectation des communes à un CLPE (mettre les codes commune Insee concernées et le nouveau nom du CLPE associé)."
+        "- Ajout des communes suivantes...\n"
+        "- Modification de l'affectation..."
     )
-    # Encodage spécifique pour l'URL via urllib.parse.quote
     mail_url = f"mailto:{destinataire}?subject={urllib.parse.quote(sujet)}&body={urllib.parse.quote(corps_email)}"
 
-    # Utilisation de triple guillemets clairs pour éviter le SyntaxError
     st.markdown(f"""
 **Format du fichier CSV attendu :**
-- **Colonne 1** : Doit contenir le **{C_INSEE}** (ex: 75001).
-- **Colonne 2** : Doit contenir le nom souhaité pour le comité.
+- **Mode Utilisateur** : 2 colonnes ({C_INSEE} et Nouveau Nom).
+- **Mode Administrateur** : Import complet possible. Le fichier doit contenir au moins la colonne **{C_INSEE}** pour identifier les lignes.
 
----
-**Une difficulté ou une demande spécifique ?**
-Si vous ne parvenez pas à utiliser l'outil de chargement ou si votre demande concerne l'ajout de nouveaux codes commune Insee.
-
-Veuillez cliquer sur le bouton ci-dessous pour nous envoyer un e-mail pré-rempli :
+**Règles de traitement :**
+1. **Utilisateur** : Remplit uniquement la colonne de proposition ({C_NOUVEAU_NOM}).
+2. **Administrateur** : Met à jour directement les champs officiels (Région, Département, Nom Officiel, etc.) et crée les nouveaux codes Insee si absents.
 """)
     
-    st.link_button(
-        "📧 Contactez le support (Help)", 
-        mail_url, 
-        help="Vous ne parvenez pas à utiliser l'outil de chargement de fichier ou votre demande concerne l'ajout de codes commune."
-    )
+    st.link_button("📧 Contactez le support (Help)", mail_url, help="Ouvre votre logiciel de messagerie pour une demande d'assistance personnalisée.")
 
 col_mail, col_file = st.columns([1, 2])
 with col_mail:
     if not is_admin:
-        contact_mail = st.text_input("📧 Votre e-mail de contact :", placeholder="prenom.nom@domaine.fr", help="Obligatoire pour tracer l'origine de la demande (Visible dans la colonne Contact).")
+        contact_mail = st.text_input("📧 Votre e-mail de contact :", placeholder="prenom.nom@domaine.fr", help="Obligatoire pour tracer l'origine de la demande dans la base de données.")
         email_valid = bool(re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", contact_mail)) if contact_mail else False
     else:
-        st.info("✅ **Identifié comme Administrateur**")
-        st.caption("Les modifications seront appliquées directement sans validation intermédiaire.")
+        st.info("🛠️ **Mode Admin : Import complet**")
+        st.caption("Vous pouvez mettre à jour tous les champs via le CSV.")
         email_valid = True
 
 with col_file:
-    # L'utilisation de st.session_state.uploader_key permet de réinitialiser/purger le composant après succès
-    up_file = st.file_uploader("Charger le fichier CSV de mise à jour", type="csv", key=f"uploader_{st.session_state.uploader_key}", help="Sélectionnez un fichier CSV encodé en UTF-8.")
+    up_file = st.file_uploader("Charger le fichier CSV de mise à jour", type="csv", key=f"uploader_{st.session_state.uploader_key}", help="Sélectionnez un fichier CSV (séparateur point-virgule ou virgule) encodé en UTF-8.")
 
 if up_file and email_valid:
     try:
-        df_up = pd.read_csv(up_file, sep=None, engine='python', dtype=str, encoding='utf-8-sig').iloc[:, [0, 1]]
-        df_up.columns = [C_INSEE, "tmp_name"]
-        df_up["tmp_name"] = df_up["tmp_name"].fillna("")
+        df_up = pd.read_csv(up_file, sep=None, engine='python', dtype=str, encoding='utf-8-sig')
         
-        # --- BLOC DE TRAITEMENT DE L'IMPORT CSV ---
-        if st.button("🔄 Lancer l'intégration du fichier", help="Cliquez pour traiter le fichier et mettre à jour la base de données ci-dessous."):
+        if st.button("🔄 Lancer l'intégration du fichier", help="Traite les données du fichier chargé et les fusionne avec la base actuelle."):
             today = datetime.now().strftime("%d/%m/%Y")
-            
-            # Détermination du mode de fusion
-            mode = 'outer' if is_admin else 'left'
-            
-            merged = pd.merge(st.session_state.df_main, df_up, on=C_INSEE, how=mode)
-            mask = merged["tmp_name"].notna()
-            
+            df_main = st.session_state.df_main.copy()
+
             if is_admin:
-                # --- LOGIQUE ADMINISTRATEUR ---
-                merged.loc[mask, C_NOM_OFFICIEL] = merged.loc[mask, "tmp_name"]
-                merged.loc[mask, C_DATE_MAJ_ADMIN] = today
-                # Nettoyage des anciennes demandes
-                merged.loc[mask, [C_NOUVEAU_NOM, C_CONTACT, C_DATE_DEMANDE]] = ""
+                # --- LOGIQUE ADMIN : MISE À JOUR MULTI-COLONNES ---
+                if C_INSEE not in df_up.columns:
+                    st.error(f"Le fichier doit contenir la colonne '{C_INSEE}'.")
+                else:
+                    cols_to_update = [c for c in df_up.columns if c in df_main.columns and c != C_INSEE]
+                    for _, row in df_up.iterrows():
+                        idx_insee = row[C_INSEE]
+                        if idx_insee in df_main[C_INSEE].values:
+                            for col in cols_to_update:
+                                if pd.notna(row[col]):
+                                    df_main.loc[df_main[C_INSEE] == idx_insee, col] = row[col]
+                            df_main.loc[df_main[C_INSEE] == idx_insee, C_DATE_MAJ_ADMIN] = today
+                        else:
+                            # Ajout nouvelle ligne
+                            new_row = {c: row[c] if c in df_up.columns else "" for c in df_main.columns}
+                            new_row[C_DATE_MAJ_ADMIN] = today
+                            df_main = pd.concat([df_main, pd.DataFrame([new_row])], ignore_index=True)
+                    st.session_state.df_main = df_main
+                    st.success("✅ Base mise à jour intégralement.")
             else:
-                # --- LOGIQUE UTILISATEUR STANDARD ---
+                # --- LOGIQUE UTILISATEUR : PROPOSITION DE NOM ---
+                df_up = df_up.iloc[:, [0, 1]]
+                df_up.columns = [C_INSEE, "tmp_name"]
+                merged = pd.merge(df_main, df_up, on=C_INSEE, how='left')
+                mask = merged["tmp_name"].notna()
                 merged.loc[mask, C_NOUVEAU_NOM] = merged.loc[mask, "tmp_name"]
                 merged.loc[mask, C_CONTACT] = contact_mail
                 merged.loc[mask, C_DATE_DEMANDE] = today
-            
-            merged.drop(columns=["tmp_name"], inplace=True)
-            st.session_state.df_main = merged.fillna("")
-            
-            # On incrémente la clé pour purger visuellement le fichier uploadé
+                st.session_state.df_main = merged.drop(columns=["tmp_name"]).fillna("")
+                st.success("✅ Propositions transmises à l'administrateur.")
+
             st.session_state.uploader_key += 1
-            
-            st.success("✅ L'intégration a été effectuée avec succès. Le fichier a été purgé.")
             st.rerun()
             
     except Exception as e:
-        st.error(f"⚠️ Erreur lors de la lecture du fichier : {e}")
+        st.error(f"⚠️ Erreur : {e}")
 elif up_file and not email_valid:
-    st.warning("ℹ️ Veuillez renseigner un e-mail valide pour soumettre vos modifications.")
-
+    st.warning("ℹ️ Veuillez renseigner un e-mail valide.")
 
 # --- 5. VISUALISATION ET ÉDITION ---
 st.divider()
-
 view_config = {
-    C_REG_CODE: None, C_DEPT_CODE: None, C_CLE_CODE: None,
-    C_REG_LIB: st.column_config.TextColumn("Libellé\nRégion", width="small"),
-    C_DEPT_LIB: st.column_config.TextColumn("Libellé\nDépartement", width="small"),
-    C_INSEE: st.column_config.TextColumn("Code commune\nInsee", width="small"),
-    C_NOM_OFFICIEL: st.column_config.TextColumn("Nom du Comité Local\nPour l'Emploi", width="medium"),
-    C_DATE_MAJ_ADMIN: st.column_config.TextColumn("Date mise à jour\nAdmin", width="small"),
-    C_NOUVEAU_NOM: st.column_config.TextColumn("Nouveau Nom du Comité\nLocal Pour l'Emploi", width="medium"),
-    C_DATE_DEMANDE: st.column_config.TextColumn("Date de la\ndemande", width="small"),
-    C_CONTACT: st.column_config.TextColumn("Contact\nE-mail", width="small")
+    C_REG_CODE: st.column_config.TextColumn("Code Région", width="small"),
+    C_DEPT_CODE: st.column_config.TextColumn("Code Dépt", width="small"),
+    C_INSEE: st.column_config.TextColumn("Code Insee", width="small"),
+    C_REG_LIB: st.column_config.TextColumn("Libellé Région", width="medium"),
+    C_DEPT_LIB: st.column_config.TextColumn("Libellé Département", width="medium"),
+    C_NOM_OFFICIEL: st.column_config.TextColumn("Nom Officiel CLPE", width="medium"),
+    C_DATE_MAJ_ADMIN: st.column_config.TextColumn("MAJ Admin", width="small"),
+    C_NOUVEAU_NOM: st.column_config.TextColumn("Proposition Nom", width="medium"),
+    C_DATE_DEMANDE: st.column_config.TextColumn("Date Demande", width="small"),
+    C_CONTACT: st.column_config.TextColumn("Contact", width="small")
 }
 
 if is_admin:
     st.subheader("✍️ Zone d'Administration (Édition & Validation)")
-    f_edit = st.checkbox("Éditer uniquement la sélection filtrée", value=True, help="Si décoché, vous accéderez à toute la base de données, y compris les éléments masqués par les filtres.")
+    f_edit = st.checkbox("Éditer uniquement la sélection filtrée", value=True, help="Décochez pour modifier l'ensemble de la base sans tenir compte des filtres.")
     
     df_to_edit = df_display if f_edit else st.session_state.df_main
     edited_df = st.data_editor(df_to_edit, use_container_width=True, column_config=view_config, num_rows="dynamic")
     
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("💾 Sauvegarder les saisies manuelles", use_container_width=True, help="Enregistre les modifications que vous venez de taper directement dans le tableau ci-dessus."):
+        if st.button("💾 Sauvegarder les saisies manuelles", use_container_width=True, help="Enregistre les modifications effectuées directement dans le tableau."):
             st.session_state.df_main.update(edited_df)
-            st.success("Modifications manuelles enregistrées.")
+            st.success("Modifications enregistrées.")
             st.rerun()
     with c2:
-        if st.button("🗑️ Purger les propositions", use_container_width=True, help="Annule et efface toutes les demandes de 'Nouveau Nom' visibles dans le tableau actuel."):
+        if st.button("🗑️ Purger les propositions", use_container_width=True, help="Efface toutes les demandes de 'Nouveau Nom' visibles."):
             st.session_state.df_main.loc[df_display.index, [C_NOUVEAU_NOM, C_CONTACT, C_DATE_DEMANDE]] = ""
             st.rerun()
     with c3:
-        if st.button("✅ Valider et Écraser les noms", use_container_width=True, type="primary", help="Approuve les propositions visibles : le 'Nouveau Nom' devient le 'Nom Officiel' et la date de mise à jour admin est enregistrée."):
+        if st.button("✅ Valider et Écraser les noms", use_container_width=True, type="primary", help="Le 'Nouveau Nom' devient le 'Nom Officiel' pour les lignes sélectionnées."):
             today = datetime.now().strftime("%d/%m/%Y")
             mask_v = (st.session_state.df_main.index.isin(df_display.index)) & (st.session_state.df_main[C_NOUVEAU_NOM] != "")
             st.session_state.df_main.loc[mask_v, C_NOM_OFFICIEL] = st.session_state.df_main.loc[mask_v, C_NOUVEAU_NOM]
@@ -234,42 +225,31 @@ if is_admin:
             st.balloons()
             st.rerun()
             
-    # --- GESTION DES SAUVEGARDES HORODATÉES ---
     st.divider()
-    st.subheader("🗄️ Gestion des sauvegardes de la base")
-    st.info("💡 Vous pouvez créer un point de restauration de la base de données actuelle avant de faire des modifications massives ou après une session de validation.")
-    
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        if st.button("💾 Créer une nouvelle sauvegarde", help="Capture l'état exact de la base de données à cet instant et le stocke en mémoire."):
-            timestamp_backup = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            st.session_state.backups[timestamp_backup] = st.session_state.df_main.copy()
-            st.success(f"✅ Sauvegarde créée avec succès le {timestamp_backup}")
-            st.rerun()
-            
-    with col_b2:
+    st.subheader("🗄️ Gestion des sauvegardes")
+    cb1, cb2 = st.columns(2)
+    with cb1:
+        if st.button("💾 Créer une sauvegarde", help="Capture l'état actuel de la base de données."):
+            ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            st.session_state.backups[ts] = st.session_state.df_main.copy()
+            st.success(f"Sauvegarde {ts} effectuée.")
+    with cb2:
         if st.session_state.backups:
-            backup_options = list(st.session_state.backups.keys())
-            backup_options.sort(reverse=True)
-            
-            selected_backup = st.selectbox("Choisir une sauvegarde à restaurer :", options=backup_options, help="Sélectionnez l'horodatage d'une ancienne sauvegarde à recharger.")
-            if st.button("⚠️ Restaurer cette sauvegarde", type="secondary", help="Attention, cela écrasera l'état actuel de la base de données par l'état sélectionné."):
-                st.session_state.df_main = st.session_state.backups[selected_backup].copy()
-                st.success(f"🔄 Base de données restaurée à l'état du {selected_backup}")
+            sel_b = st.selectbox("Restaurer une version :", options=sorted(st.session_state.backups.keys(), reverse=True), help="Sélectionnez un point de restauration.")
+            if st.button("⚠️ Restaurer", help="Écrase la base actuelle par la sauvegarde choisie."):
+                st.session_state.df_main = st.session_state.backups[sel_b].copy()
                 st.rerun()
-        else:
-            st.write("Aucune sauvegarde disponible pour le moment.")
 
 else:
     st.subheader("📊 Consultation du Référentiel")
-    st.info("💡 Les colonnes de droite affichent les demandes de changement en cours de validation.")
+    st.info("💡 Les colonnes de droite affichent les demandes de changement en cours.")
     st.dataframe(df_display, use_container_width=True, column_config=view_config)
 
 # --- 6. EXPORTATION ---
 st.divider()
 st.subheader("📥 Exportation")
-sel_cols = st.multiselect("Sélectionnez les colonnes à exporter :", options=st.session_state.df_main.columns.tolist(), default=[C_INSEE, C_NOM_OFFICIEL], help="Ajoutez ou retirez des colonnes pour générer votre fichier CSV sur mesure.")
+sel_cols = st.multiselect("Sélectionnez les colonnes :", options=st.session_state.df_main.columns.tolist(), default=[C_INSEE, C_NOM_OFFICIEL], help="Choisissez les informations à inclure dans votre fichier CSV.")
 
 if sel_cols:
     csv_data = df_display[sel_cols].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-    st.download_button(label=f"⬇️ Télécharger le CSV ({len(df_display)} lignes)", data=csv_data, file_name="referentiel_clpe_export.csv", mime="text/csv", help="Cliquez pour obtenir le fichier exploitable dans Excel (séparateur point-virgule).")
+    st.download_button(label=f"⬇️ Télécharger le CSV", data=csv_data, file_name="referentiel_clpe_export.csv", mime="text/csv", help="Génère un fichier CSV compatible Excel.")
