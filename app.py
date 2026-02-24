@@ -97,13 +97,13 @@ if f_dept:
 if f_contact:
     df_display = df_display[df_display[C_CONTACT].isin(f_contact)]
 
-# --- 4. SECTION UPLOAD ET AIDE CONTEXTUELLE ---
+# --- 4. SECTION UPLOAD ET GUIDE ---
 st.title("📍 Référentiel des Comités Locaux Pour l'Emploi")
 st.markdown("---")
 st.subheader("📥 Mise à jour du référentiel")
 
 with st.expander("❓ Guide complet : Comment importer vos modifications ?"):
-    # TOUTE LA LOGIQUE MAILTO EST DÉSORMAIS ICI
+    # TOUTE LA LOGIQUE MAILTO EST ICI
     destinataire = "denis.gorce@francetravail.fr"
     sujet = "Mise à jour du référentiel CLPE"
     corps_email = (
@@ -114,24 +114,26 @@ with st.expander("❓ Guide complet : Comment importer vos modifications ?"):
     )
     # Encodage spécifique pour l'URL
     mail_url = f"mailto:{destinataire}?subject={urllib.parse.quote(sujet)}&body={urllib.parse.quote(corps_email)}"
-    st.markdown(f"""
-    **Format du fichier CSV attendu :**
-    - **Colonne 1** : Doit contenir le **{C_INSEE}** (ex: 75001).
-    - **Colonne 2** : Doit contenir le nom souhaité pour le comité.
-    - *Note : Seul l'ordre des colonnes compte, les entêtes de votre fichier n'ont pas d'importance.*
 
-    **Règles de traitement selon votre profil :**
-    1. **Utilisateur (Standard)** : Votre e-mail est obligatoire. Le fichier remplit la colonne *{C_NOUVEAU_NOM}* et la date de demande, en attente de validation.
-    2. **Administrateur** : L'e-mail n'est pas requis. Le fichier met à jour **directement** la colonne *{C_NOM_OFFICIEL}* et horodate la *Date de mise à jour admin*. L'admin peut également créer de nouveaux codes Insee via l'import.
-    """---
-    **Une difficulté ou une demande spécifique ?**
-    Si vous ne parvenez pas à utiliser l'outil de chargement ou si votre demande concerne :
-    - L'ajout de nouveaux codes commune Insee.
-    - La modification de l'affectation d'une commune.
-    - Un changement de nom complexe.
-    
-    Veuillez cliquer sur le bouton ci-dessous pour nous envoyer un e-mail pré-rempli :
-    """)
+    # Utilisation de triple guillemets clairs pour éviter le SyntaxError
+    st.markdown(f"""
+**Format du fichier CSV attendu :**
+- **Colonne 1** : Doit contenir le **{C_INSEE}** (ex: 75001).
+- **Colonne 2** : Doit contenir le nom souhaité pour le comité.
+
+**Règles de traitement :**
+1. **Utilisateur** : E-mail obligatoire. Remplit la colonne *{C_NOUVEAU_NOM}*.
+2. **Administrateur** : Pas d'e-mail requis. Met à jour directement le nom officiel.
+
+---
+**Une difficulté ou une demande spécifique ?**
+Si vous ne parvenez pas à utiliser l'outil de chargement ou si votre demande concerne :
+- L'ajout de nouveaux codes commune Insee.
+- La modification de l'affectation d'une commune.
+- Un changement de nom complexe.
+
+Veuillez cliquer sur le bouton ci-dessous pour nous envoyer un e-mail pré-rempli :
+""")
     
     st.link_button(
         "📧 Contactez le support (Help)", 
