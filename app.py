@@ -122,16 +122,9 @@ with st.expander("❓ Guide complet : Comment importer vos modifications ?"):
 - **Colonne 1** : Doit contenir le **{C_INSEE}** (ex: 75001).
 - **Colonne 2** : Doit contenir le nom souhaité pour le comité.
 
-**Règles de traitement :**
-1. **Utilisateur** : E-mail obligatoire. Remplit la colonne *{C_NOUVEAU_NOM}*.
-2. **Administrateur** : Pas d'e-mail requis. Met à jour directement le nom officiel.
-
 ---
 **Une difficulté ou une demande spécifique ?**
-Si vous ne parvenez pas à utiliser l'outil de chargement ou si votre demande concerne :
-- L'ajout de nouveaux codes commune Insee.
-- La modification de l'affectation d'une commune.
-- Un changement de nom complexe.
+Si vous ne parvenez pas à utiliser l'outil de chargement ou si votre demande concerne l'ajout de nouveaux codes commune Insee.
 
 Veuillez cliquer sur le bouton ci-dessous pour nous envoyer un e-mail pré-rempli :
 """)
