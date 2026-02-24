@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 from datetime import datetime
+import urllib.parse  # Import ajouté pour corriger la NameError
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -112,7 +113,7 @@ with st.expander("❓ Guide complet : Comment importer vos modifications ?"):
         "- Modification du nom d'un CLPE (mettre le nom actuel et le nom souhaité).\n"
         "- Modification d'affectation des communes à un CLPE (mettre les codes commune Insee concernées et le nouveau nom du CLPE associé)."
     )
-    # Encodage spécifique pour l'URL
+    # Encodage spécifique pour l'URL via urllib.parse.quote
     mail_url = f"mailto:{destinataire}?subject={urllib.parse.quote(sujet)}&body={urllib.parse.quote(corps_email)}"
 
     # Utilisation de triple guillemets clairs pour éviter le SyntaxError
