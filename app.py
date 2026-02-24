@@ -11,7 +11,7 @@ C_NOM_OFFICIEL = "Nom du Comité Local Pour l'Emploi"
 C_NOUVEAU_NOM = "Nouveau Nom du Comité Local Pour l'Emploi"
 C_CONTACT = "Contact"
 
-# --- 1. INITIALISATION (SESSION STATE) ---
+# --- 1. INITIALISATION DES DONNÉES ---
 if 'df_main' not in st.session_state:
     data = {
         "Code Région": ["11", "24", "44", "32"],
@@ -20,15 +20,15 @@ if 'df_main' not in st.session_state:
         "Libellé Département": ["Paris", "Eure-et-Loir", "Bas-Rhin", "Nord"],
         C_INSEE: ["75001", "28001", "67001", "59001"],
         C_NOM_OFFICIEL: ["Comité Paris Centre", "Comité Chartres", "Comité Strasbourg", "Comité Lille"],
-        C_NOUVEAU_NOM: ["", "Comité Chartres Agglo", "", ""], 
-        C_CONTACT: ["", "jean.dupont@test.fr", "", ""]
+        C_NOUVEAU_NOM: ["", "", "", ""], 
+        C_CONTACT: ["", "", "", ""]
     }
     st.session_state.df_main = pd.DataFrame(data)
 
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
-# --- 2. BARRE LATÉRALE (CONNEXION & FILTRES) ---
+# --- 2. BARRE LATÉRALE (CONNEXION & FILTRES PERSISTANTS) ---
 with st.sidebar:
     st.header("🔐 Administration")
     if not st.session_state.authenticated:
@@ -49,14 +49,21 @@ with st.sidebar:
     st.divider()
     
     st.header("🔍 Filtres")
-    regions = st.multiselect("Régions", options=sorted(st.session_state.df_main["Libellé Région"].dropna().unique()))
-    depts = st.multiselect("Départements", options=sorted(st.session_state.df_main["Libellé Département"].dropna().unique()))
+    # L'ajout de 'key=' permet aux filtres de survivre à la déconnexion
+    regions = st.multiselect("Régions", 
+                            options=sorted(st.session_state.df_main["Libellé Région"].dropna().unique()),
+                            key="filter_regions")
     
-    # NOUVEAU : Filtre par Contact
+    depts = st.multiselect("Départements", 
+                           options=sorted(st.session_state.df_main["Libellé Département"].dropna().unique()),
+                           key="filter_depts")
+    
     contacts_dispo = sorted([c for c in st.session_state.df_main[C_CONTACT].unique() if c != ""])
-    contact_filter = st.multiselect("Filtrer par Contact (Auteur)", options=contacts_dispo)
+    contact_filter = st.multiselect("Filtrer par Contact", 
+                                    options=contacts_dispo,
+                                    key="filter_contacts")
 
-# --- 3. LOGIQUE DE FILTRAGE ---
+# --- 3. LOGIQUE DE FILTRAGE UNIFIÉE ---
 df_display = st.session_state.df_main.copy()
 if regions:
     df_display = df_display[df_display["Libellé Région"].isin(regions)]
@@ -70,103 +77,70 @@ st.title("📍 Gestion du Référentiel CLPE")
 st.markdown("---")
 st.subheader("📥 Soumettre une évolution")
 
-with st.expander("❓ Guide : Format et règles de gestion"):
-    st.markdown(f"""
-    - **Fichier CSV** : 2 colonnes minimum (1: Code INSEE, 2: Nouveau Nom).
-    - **Valeurs vides** : Si le nom est vide dans votre fichier, il apparaîtra comme vide dans la table (demande de suppression).
-    - **Utilisateur** : Met à jour les communes existantes.
-    - **Admin** : Peut ajouter de nouvelles communes via l'import.
-    """)
-
 col_mail, col_file = st.columns([1, 2])
 with col_mail:
-    contact_mail = st.text_input("📧 Votre e-mail de contact :", placeholder="nom@exemple.fr")
+    contact_mail = st.text_input("📧 Votre e-mail :", placeholder="nom@exemple.fr")
     email_valid = bool(re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", contact_mail)) if contact_mail else False
 
 with col_file:
-    up_file = st.file_uploader("Charger le fichier CSV", type="csv")
+    up_file = st.file_uploader("Charger le fichier CSV (Col 1: INSEE, Col 2: Nouveau Nom)", type="csv")
 
 if up_file and email_valid:
     try:
-        # On lit tout en string pour garder les codes INSEE intacts
         df_up = pd.read_csv(up_file, sep=None, engine='python', dtype=str, encoding='utf-8-sig')
-        
         if len(df_up.columns) >= 2:
-            # On prend les 2 premières colonnes peu importe leurs noms
             df_up = df_up.iloc[:, [0, 1]].copy()
             df_up.columns = [C_INSEE, "tmp_name"]
-            
-            # Traitement des noms vides (on force en string vide plutôt qu'en NaN)
-            df_up["tmp_name"] = df_up["tmp_name"].fillna("")
+            df_up["tmp_name"] = df_up["tmp_name"].fillna("") # Gestion des noms vides demandée
             
             if st.button(f"🔄 Appliquer en tant que '{C_NOUVEAU_NOM}'"):
-                df_staging = df_up.copy()
-                df_staging["tmp_contact"] = contact_mail
-
                 mode = 'outer' if is_admin else 'left'
-                merged = pd.merge(st.session_state.df_main, df_staging, on=C_INSEE, how=mode)
-
-                # Si une ligne était dans l'upload (tmp_contact non nul), on écrase avec les nouvelles valeurs
-                # même si tmp_name est vide.
-                mask = merged["tmp_contact"].notna()
-                merged.loc[mask, C_NOUVEAU_NOM] = merged.loc[mask, "tmp_name"]
-                merged.loc[mask, C_CONTACT] = merged.loc[mask, "tmp_contact"]
+                merged = pd.merge(st.session_state.df_main, df_up, on=C_INSEE, how=mode)
                 
-                merged.drop(columns=["tmp_name", "tmp_contact"], inplace=True)
+                # Mise à jour des champs de proposition
+                mask = merged["tmp_name"].notna()
+                merged.loc[mask, C_NOUVEAU_NOM] = merged.loc[mask, "tmp_name"]
+                merged.loc[mask, C_CONTACT] = contact_mail
+                
+                merged.drop(columns=["tmp_name"], inplace=True)
                 merged.fillna("", inplace=True)
                 st.session_state.df_main = merged
-                
-                st.success("✅ Proposition enregistrée.")
+                st.success("Proposition enregistrée.")
                 st.rerun()
-        else:
-            st.error("Le fichier doit contenir 2 colonnes.")
     except Exception as e:
         st.error(f"Erreur : {e}")
 
-# --- 5. VISUALISATION ET ACTIONS ADMIN ---
+# --- 5. VISUALISATION ET ACTIONS ---
 st.divider()
-has_updates = (st.session_state.df_main[C_CONTACT] != "").any()
 
 if is_admin:
     st.subheader("✍️ Zone d'Édition et Validation (Admin)")
     
-    # On propose à l'admin de choisir son mode de vue
-    edit_mode = st.checkbox("Éditer uniquement les lignes filtrées", value=True)
-    df_to_edit = df_display if edit_mode else st.session_state.df_main
+    # Choix de la vue pour l'admin
+    edit_filtered = st.checkbox("Éditer uniquement la sélection filtrée", value=True)
+    df_to_edit = df_display if edit_filtered else st.session_state.df_main
 
-    if has_updates:
-        st.error(f"📢 {len(df_display[df_display[C_CONTACT] != ''])} modification(s) en attente dans cette vue.")
-
-    # L'éditeur affiche maintenant la vue choisie
     edited_df = st.data_editor(df_to_edit, use_container_width=True, num_rows="dynamic")
     
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("💾 Sauvegarder les modifications", use_container_width=True):
-            # Logique de sauvegarde intelligente : 
-            # On met à jour la base globale avec les lignes modifiées dans l'éditeur
+        if st.button("💾 Sauvegarder les saisies manuelles", use_container_width=True):
             st.session_state.df_main.update(edited_df)
-            
-            # Si l'admin a ajouté des lignes (num_rows="dynamic"), on les ajoute aussi
-            if len(edited_df) > len(df_to_edit):
-                new_rows = edited_df.iloc[len(df_to_edit):]
-                st.session_state.df_main = pd.concat([st.session_state.df_main, new_rows], ignore_index=True)
-            
-            st.success("Base mise à jour avec succès.")
+            st.success("Modifications enregistrées.")
             st.rerun()
     
     with c2:
-        # Purge (déjà basée sur df_display)
         if st.button("🗑️ Purger les propositions affichées", use_container_width=True):
             st.session_state.df_main.loc[df_display.index, [C_NOUVEAU_NOM, C_CONTACT]] = ""
-            st.warning("Propositions effacées pour la sélection actuelle.")
+            st.warning("Propositions purgées pour la sélection.")
             st.rerun()
 
     with c3:
-        # Validation (basée sur df_display)
         if st.button("✅ Valider la sélection", use_container_width=True, type="primary"):
-            mask = (st.session_state.df_main.index.isin(df_display.index)) & (st.session_state.df_main[C_NOUVEAU_NOM] != "")
-            st.session_state.df_main.loc[mask, C_NOM_OFFICIEL] = st.session_state.df_main.loc[mask, C_NOUVEAU_NOM]
+            # On ne valide que ce qui est affiché ET qui a un nouveau nom
+            mask_val = (st.session_state.df_main.index.isin(df_display.index)) & (st.session_state.df_main[C_NOUVEAU_NOM] != "")
+            st.session_state.df_main.loc[mask_val, C_NOM_OFFICIEL] = st.session_state.df_main.loc[mask_val, C_NOUVEAU_NOM]
+            # Reset des champs de suivi pour la sélection
             st.session_state.df_main.loc[df_display.index, [C_NOUVEAU_NOM, C_CONTACT]] = ""
             st.balloons()
             st.rerun()
@@ -177,16 +151,8 @@ else:
 # --- 6. EXPORTATION ---
 st.divider()
 st.subheader("📥 Exportation")
-
-all_cols = df_display.columns.tolist()
-# Par défaut : uniquement Insee et Nom Officiel
 default_export = [C_INSEE, C_NOM_OFFICIEL]
-
-sel_cols = st.multiselect(
-    "Colonnes à inclure :", 
-    options=all_cols, 
-    default=[c for c in default_export if c in all_cols]
-)
+sel_cols = st.multiselect("Colonnes :", options=df_display.columns.tolist(), default=default_export)
 
 if sel_cols:
     csv_data = df_display[sel_cols].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
