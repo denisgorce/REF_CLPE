@@ -120,28 +120,54 @@ if up_file and email_valid:
         df_up.columns = [C_INSEE, "tmp_name"]
         df_up["tmp_name"] = df_up["tmp_name"].fillna("")
         
+     # --- BLOC DE TRAITEMENT DE L'IMPORT CSV ---
         if st.button("🔄 Lancer l'intégration du fichier", help="Cliquez pour traiter le fichier et mettre à jour le tableau ci-dessous."):
+            # On définit la date du jour pour l'horodatage
             today = datetime.now().strftime("%d/%m/%Y")
+            
+            # Détermination du mode de fusion :
+            # - 'outer' pour l'admin : permet d'ajouter de nouveaux codes INSEE non présents en base
+            # - 'left' pour l'utilisateur : limite la mise à jour aux codes INSEE déjà existants
             mode = 'outer' if is_admin else 'left'
+            
+            # Fusion de la base principale avec le fichier chargé
             merged = pd.merge(st.session_state.df_main, df_up, on=C_INSEE, how=mode)
             
+            # Création d'un masque pour identifier les lignes impactées par le fichier importé
             mask = merged["tmp_name"].notna()
+            
             if is_admin:
-                # Mise à jour directe pour l'admin
+                # --- LOGIQUE ADMINISTRATEUR ---
+                # 1. Mise à jour directe du nom officiel avec la valeur du fichier
                 merged.loc[mask, C_NOM_OFFICIEL] = merged.loc[mask, "tmp_name"]
+                
+                # 2. Enregistrement de la date d'import dans la colonne admin
                 merged.loc[mask, C_DATE_MAJ_ADMIN] = today
-                # Nettoyage des éventuelles propositions précédentes sur ces lignes
+                
+                # 3. Nettoyage de sécurité : on efface les anciennes propositions en attente
+                # sur ces lignes puisque le nom officiel vient d'être mis à jour.
                 merged.loc[mask, [C_NOUVEAU_NOM, C_CONTACT, C_DATE_DEMANDE]] = ""
             else:
-                # Simple proposition pour l'utilisateur
+                # --- LOGIQUE UTILISATEUR STANDARD ---
+                # 1. On remplit la colonne de proposition au lieu du nom officiel
                 merged.loc[mask, C_NOUVEAU_NOM] = merged.loc[mask, "tmp_name"]
+                
+                # 2. On enregistre l'e-mail pour la traçabilité
                 merged.loc[mask, C_CONTACT] = contact_mail
+                
+                # 3. On enregistre la date de la demande
                 merged.loc[mask, C_DATE_DEMANDE] = today
             
+            # Suppression de la colonne temporaire issue du merge
             merged.drop(columns=["tmp_name"], inplace=True)
+            
+            # Remplacement des valeurs NaN par des chaînes vides pour la propreté du tableau
             st.session_state.df_main = merged.fillna("")
-            st.success("✅ Traitement terminé.")
+            
+            # Message de succès et rafraîchissement de l'interface
+            st.success("✅ L'intégration a été effectuée avec succès.")
             st.rerun()
+            
     except Exception as e:
         st.error(f"⚠️ Erreur lors de la lecture : {e}")
 elif up_file and not email_valid:
