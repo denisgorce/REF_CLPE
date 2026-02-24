@@ -130,33 +130,44 @@ has_updates = (st.session_state.df_main[C_CONTACT] != "").any()
 if is_admin:
     st.subheader("✍️ Zone d'Édition et Validation (Admin)")
     
-    # Rappel du filtre actif pour la purge
-    if (regions or depts or contact_filter):
-        st.info(f"Filtre actif : {len(df_display)} lignes sélectionnées.")
+    # On propose à l'admin de choisir son mode de vue
+    edit_mode = st.checkbox("Éditer uniquement les lignes filtrées", value=True)
+    df_to_edit = df_display if edit_mode else st.session_state.df_main
 
-    edited_df = st.data_editor(st.session_state.df_main, use_container_width=True, num_rows="dynamic")
+    if has_updates:
+        st.error(f"📢 {len(df_display[df_display[C_CONTACT] != ''])} modification(s) en attente dans cette vue.")
+
+    # L'éditeur affiche maintenant la vue choisie
+    edited_df = st.data_editor(df_to_edit, use_container_width=True, num_rows="dynamic")
     
-    # BOUTONS D'ACTION
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("💾 Sauvegarder saisies manuelles", use_container_width=True):
-            st.session_state.df_main = edited_df
-            st.success("Enregistré.")
+        if st.button("💾 Sauvegarder les modifications", use_container_width=True):
+            # Logique de sauvegarde intelligente : 
+            # On met à jour la base globale avec les lignes modifiées dans l'éditeur
+            st.session_state.df_main.update(edited_df)
+            
+            # Si l'admin a ajouté des lignes (num_rows="dynamic"), on les ajoute aussi
+            if len(edited_df) > len(df_to_edit):
+                new_rows = edited_df.iloc[len(df_to_edit):]
+                st.session_state.df_main = pd.concat([st.session_state.df_main, new_rows], ignore_index=True)
+            
+            st.success("Base mise à jour avec succès.")
             st.rerun()
     
     with c2:
-        # NOUVEAU : Bouton de purge des propositions filtrées
-        if st.button("🗑️ Purger les propositions filtrées", use_container_width=True, help="Efface le 'Nouveau Nom' et le 'Contact' pour les lignes affichées."):
-            indices_a_purger = df_display.index
-            st.session_state.df_main.loc[indices_a_purger, [C_NOUVEAU_NOM, C_CONTACT]] = ""
-            st.warning("Propositions purgées pour la sélection.")
+        # Purge (déjà basée sur df_display)
+        if st.button("🗑️ Purger les propositions affichées", use_container_width=True):
+            st.session_state.df_main.loc[df_display.index, [C_NOUVEAU_NOM, C_CONTACT]] = ""
+            st.warning("Propositions effacées pour la sélection actuelle.")
             st.rerun()
 
     with c3:
-        if st.button("✅ Valider et Écraser (Définitif)", use_container_width=True, type="primary"):
-            mask = st.session_state.df_main[C_NOUVEAU_NOM] != ""
+        # Validation (basée sur df_display)
+        if st.button("✅ Valider la sélection", use_container_width=True, type="primary"):
+            mask = (st.session_state.df_main.index.isin(df_display.index)) & (st.session_state.df_main[C_NOUVEAU_NOM] != "")
             st.session_state.df_main.loc[mask, C_NOM_OFFICIEL] = st.session_state.df_main.loc[mask, C_NOUVEAU_NOM]
-            st.session_state.df_main[[C_NOUVEAU_NOM, C_CONTACT]] = ""
+            st.session_state.df_main.loc[df_display.index, [C_NOUVEAU_NOM, C_CONTACT]] = ""
             st.balloons()
             st.rerun()
 else:
